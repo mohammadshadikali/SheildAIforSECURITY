@@ -160,8 +160,8 @@ Classification: ${c.data_classification || 'CONFIDENTIAL'}
         {displayReports.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12">
             <FileText className="h-8 w-8 text-slate-600 mb-2" />
-            <p className="text-sm text-slate-500">No reports available</p>
-            <p className="text-xs text-slate-600 mt-1">Create an incident to generate a report</p>
+            <p className="text-sm text-slate-500">No reports generated yet</p>
+            <p className="text-xs text-slate-600 mt-1">Generate a report from an incident</p>
           </div>
         )}
       </div>

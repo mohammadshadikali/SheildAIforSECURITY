@@ -31,10 +31,18 @@ export function AlertQueue() {
           <h1 className="text-2xl font-bold text-white">Alert Queue</h1>
           <p className="text-sm text-slate-400 mt-1">{filtered.length} alerts requiring attention</p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5">
+        <button
+          onClick={() => setFilterStatus(prev => prev === 'new' ? 'all' : 'new')}
+          className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 transition-colors ${
+            filterStatus === 'new'
+              ? 'border-cyan-400 bg-cyan-500/20'
+              : 'border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20'
+          }`}
+          title={filterStatus === 'new' ? 'Click to show all alerts' : 'Click to filter new alerts'}
+        >
           <Bell className="h-4 w-4 text-cyan-400" />
           <span className="text-sm font-medium text-cyan-400">{alerts.filter(a => a.status === 'new').length} New</span>
-        </div>
+        </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
