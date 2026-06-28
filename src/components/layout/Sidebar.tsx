@@ -21,7 +21,6 @@ const navItems = [
   { to: '/mitre', icon: Grid3x3, label: 'MITRE ATT&CK' },
   { to: '/threat-intel', icon: Globe, label: 'Threat Intel' },
   { to: '/playbooks', icon: Play, label: 'Playbooks' },
-  { to: '/reports', icon: FileText, label: 'Reports' },
   { to: '/upload', icon: Upload, label: 'Log Upload' },
   { to: '/audit', icon: ScrollText, label: 'Audit Log' },
 ];

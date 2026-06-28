@@ -5,15 +5,12 @@ import {
   ShieldAlert,
   Brain,
   Target,
-  FileText,
   Clock,
-  Download,
   ArrowRight,
 } from 'lucide-react';
-import { store, useStore } from '../lib/store';
+import { useStore } from '../lib/store';
 import { getSeverityColor, getSeverityBg, getStatusColor, getThreatTypeLabel } from '../lib/seedData';
 import { MITRE_TECHNIQUES } from '../lib/mitreData';
-import { generateIncidentReport } from '../lib/threatDetection';
 
 export function IncidentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -22,52 +19,11 @@ export function IncidentDetail() {
   const alerts = useStore(s => s.alerts);
   const mitreMappings = useStore(s => s.mitreMappings);
   const iocs = useStore(s => s.iocs);
-  const [generatingReport, setGeneratingReport] = useState(false);
-  const [report, setReport] = useState<Record<string, unknown> | null>(null);
-
   const incident = incidents.find(i => i.id === id);
-
-  useEffect(() => {
-    if (incident) {
-      const existingReport = store.reports.find(r => r.incident_id === incident.id);
-      if (existingReport) setReport(existingReport.content_json);
-    }
-  }, [incident]);
 
   const relatedAlerts = alerts.filter(a => a.incident_id === id);
   const relatedMitre = mitreMappings.filter(m => m.incident_id === id);
   const relatedIOCs = iocs.filter(i => i.incident_id === id);
-
-  const handleGenerateReport = async () => {
-    if (!incident) return;
-    setGeneratingReport(true);
-    await new Promise(r => setTimeout(r, 1500));
-
-    const mitreForReport = relatedMitre.length > 0
-      ? relatedMitre.map(m => ({ technique_id: m.technique_id, technique_name: m.technique_name, tactic: m.tactic, confidence: m.confidence }))
-      : MITRE_TECHNIQUES.filter(t =>
-          incident.attack_vector?.toLowerCase().includes('brute') && (t.id.startsWith('T1110') || t.id === 'T1078') ||
-          incident.attack_vector?.toLowerCase().includes('sql') && (t.id === 'T1190') ||
-          incident.attack_vector?.toLowerCase().includes('phishing') && (t.id === 'T1566' || t.id.startsWith('T1078')) ||
-          incident.attack_vector?.toLowerCase().includes('ransomware') && (t.id.startsWith('T1486') || t.id === 'T1490')
-        ).slice(0, 4).map(t => ({ ...t, confidence: 0.8 }));
-
-    const result = generateIncidentReport(
-      incident,
-      relatedAlerts.map(a => ({ title: a.title, threat_type: a.threat_type, raw_payload: a.raw_payload })),
-      relatedIOCs.map(i => ({ type: i.type, value: i.value, reputation: i.reputation })),
-      mitreForReport
-    );
-
-    const created = await store.createReport({
-      incident_id: incident.id,
-      report_type: 'full',
-      content_json: result,
-    });
-
-    setReport(created.content_json);
-    setGeneratingReport(false);
-  };
 
   if (!incident) {
     return <div className="flex items-center justify-center h-64"><p className="text-slate-500">Incident not found</p></div>;
@@ -201,44 +157,6 @@ export function IncidentDetail() {
           </div>
         </div>
       </div>
-
-      {/* Report */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleGenerateReport}
-          disabled={generatingReport}
-          className="flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50 transition-colors"
-        >
-          <FileText className="h-4 w-4" />
-          {generatingReport ? 'Generating...' : 'Generate Report'}
-        </button>
-        {report && (
-          <button
-            onClick={() => {
-              const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `incident-report-${id}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            className="flex items-center gap-2 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            Export JSON
-          </button>
-        )}
-      </div>
-
-      {report && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3">Generated Incident Report</h3>
-          <pre className="overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-slate-300 font-mono leading-relaxed max-h-96">
-            {JSON.stringify(report, null, 2)}
-          </pre>
-        </div>
-      )}
     </div>
   );
 }

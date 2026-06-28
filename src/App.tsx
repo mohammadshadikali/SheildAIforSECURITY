@@ -6,7 +6,6 @@ import { AlertDetail } from './pages/AlertDetail';
 import { IncidentList } from './pages/IncidentList';
 import { IncidentDetail } from './pages/IncidentDetail';
 import { MitreHeatmap } from './pages/MitreHeatmap';
-import { Reports } from './pages/Reports';
 import { FileUpload } from './pages/FileUpload';
 import { AuditLog } from './pages/AuditLog';
 import { AIAssistant } from './pages/AIAssistant';
@@ -30,7 +29,6 @@ export default function App() {
           <Route path="/incidents" element={<IncidentList />} />
           <Route path="/incidents/:id" element={<IncidentDetail />} />
           <Route path="/mitre" element={<MitreHeatmap />} />
-          <Route path="/reports" element={<Reports />} />
           <Route path="/upload" element={<FileUpload />} />
           <Route path="/audit" element={<AuditLog />} />
           <Route path="/ai-assistant" element={<AIAssistant />} />
