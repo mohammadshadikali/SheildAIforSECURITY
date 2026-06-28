@@ -1,17 +1,56 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FileText,
   Download,
   Eye,
 } from 'lucide-react';
-import { useStore } from '../lib/store';
+import { useStore, store, type ReportRecord } from '../lib/store';
 import { generateIncidentReport } from '../lib/threatDetection';
 import { MITRE_TECHNIQUES } from '../lib/mitreData';
 
 export function Reports() {
   const reports = useStore(s => s.reports);
   const incidents = useStore(s => s.incidents);
-  const [previewReport, setPreviewReport] = useState<(typeof reports)[0] | null>(null);
+  const alerts = useStore(s => s.alerts);
+  const iocs = useStore(s => s.iocs);
+  const mitreMappings = useStore(s => s.mitreMappings);
+  const [previewReport, setPreviewReport] = useState<ReportRecord | null>(null);
+
+  const displayReports = useMemo<ReportRecord[]>(() => {
+    if (reports.length > 0) return reports;
+
+    return incidents.map(incident => {
+      const relatedAlerts = alerts.filter(a => a.incident_id === incident.id);
+      const relatedIOCs = iocs.filter(i => i.incident_id === incident.id);
+      const relatedMitre = mitreMappings.filter(m => m.incident_id === incident.id);
+
+      const mitreForReport = relatedMitre.length > 0
+        ? relatedMitre.map(m => ({ technique_id: m.technique_id, technique_name: m.technique_name, tactic: m.tactic, confidence: m.confidence }))
+        : MITRE_TECHNIQUES.filter(t =>
+            incident.attack_vector?.toLowerCase().includes('brute') && (t.id.startsWith('T1110') || t.id === 'T1078') ||
+            incident.attack_vector?.toLowerCase().includes('sql') && (t.id === 'T1190') ||
+            incident.attack_vector?.toLowerCase().includes('phishing') && (t.id === 'T1566' || t.id.startsWith('T1078')) ||
+            incident.attack_vector?.toLowerCase().includes('ransomware') && (t.id.startsWith('T1486') || t.id === 'T1490') ||
+            incident.attack_vector?.toLowerCase().includes('lateral') && t.id.startsWith('T1021') ||
+            incident.attack_vector?.toLowerCase().includes('credential') && (t.id.startsWith('T1003') || t.id.startsWith('T1110'))
+          ).slice(0, 4).map(t => ({ ...t, confidence: 0.8 }));
+
+      const content = generateIncidentReport(
+        incident,
+        relatedAlerts.map(a => ({ title: a.title, threat_type: a.threat_type, raw_payload: a.raw_payload })),
+        relatedIOCs.map(i => ({ type: i.type, value: i.value, reputation: i.reputation })),
+        mitreForReport,
+      );
+
+      return {
+        id: `report-auto-${incident.id}`,
+        incident_id: incident.id,
+        report_type: 'full' as const,
+        content_json: content,
+        generated_at: incident.updated_at || incident.created_at,
+      };
+    });
+  }, [reports, incidents, alerts, iocs, mitreMappings]);
 
   const handleExport = (report: typeof reports[0]) => {
     const blob = new Blob([JSON.stringify(report.content_json, null, 2)], { type: 'application/json' });
@@ -23,7 +62,7 @@ export function Reports() {
     URL.revokeObjectURL(url);
   };
 
-  const handleExportText = (report: typeof reports[0]) => {
+  const handleExportText = (report: ReportRecord) => {
     const c = report.content_json;
     const text = `
 INCIDENT REPORT
@@ -67,7 +106,7 @@ Classification: ${c.data_classification || 'CONFIDENTIAL'}
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Incident Reports</h1>
-        <p className="text-sm text-slate-400 mt-1">{reports.length} reports generated</p>
+        <p className="text-sm text-slate-400 mt-1">{displayReports.length} reports generated</p>
       </div>
 
       <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden">
@@ -83,7 +122,7 @@ Classification: ${c.data_classification || 'CONFIDENTIAL'}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
-              {reports.map(report => {
+              {displayReports.map(report => {
                 const incident = incidents.find(i => i.id === report.incident_id);
                 return (
                   <tr key={report.id} className="hover:bg-slate-800/40 transition-colors">
@@ -118,11 +157,11 @@ Classification: ${c.data_classification || 'CONFIDENTIAL'}
             </tbody>
           </table>
         </div>
-        {reports.length === 0 && (
+        {displayReports.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12">
             <FileText className="h-8 w-8 text-slate-600 mb-2" />
-            <p className="text-sm text-slate-500">No reports generated yet</p>
-            <p className="text-xs text-slate-600 mt-1">Generate a report from an incident detail page</p>
+            <p className="text-sm text-slate-500">No reports available</p>
+            <p className="text-xs text-slate-600 mt-1">Create an incident to generate a report</p>
           </div>
         )}
       </div>

@@ -188,12 +188,125 @@ The incident is now contained. Continue monitoring for re-emergence.`,
     if (!input.trim()) return;
     const userMsg: ChatMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMsg]);
+    const query = input;
     setInput('');
 
     setTimeout(() => {
-      const response: ChatMessage = {
+      const response = buildResponse(query);
+      setMessages(prev => [...prev, response]);
+    }, 800);
+  };
+
+  const handleQuickPrompt = (prompt: string) => {
+    const userMsg: ChatMessage = { role: 'user', content: prompt };
+    setMessages(prev => [...prev, userMsg]);
+
+    setTimeout(() => {
+      const response = buildResponse(prompt);
+      setMessages(prev => [...prev, response]);
+    }, 800);
+  };
+
+  const buildResponse = (query: string): ChatMessage => {
+    const q = query.toLowerCase();
+
+    if (q.includes('latest alerts') || q.includes('analyze the latest')) {
+      const recent = alerts.slice(0, 5);
+      return {
         role: 'assistant',
-        content: `Processing your query: "${input}"
+        content: `## Latest Alerts Analysis
+
+I reviewed the ${alerts.length} alerts currently in the queue. Here are the most recent ${recent.length} requiring attention:
+
+${recent.map((a, i) => `${i + 1}. **${a.title}** — ${a.severity.toUpperCase()} (${getThreatTypeLabel(a.threat_type)}, ${(a.confidence * 100).toFixed(0)}% confidence)`).join('\n')}
+
+### Priority Recommendation
+${recent.filter(a => a.severity === 'critical').length > 0
+  ? `${recent.filter(a => a.severity === 'critical').length} critical alerts should be triaged immediately. Escalate to incidents if patterns correlate.`
+  : 'No critical alerts in the recent batch. Continue monitoring for escalation patterns.'}
+
+Source: ${[...new Set(recent.map(a => a.source))].join(', ')}`,
+      };
+    }
+
+    if (q.includes('mitre') || q.includes('ttp')) {
+      const mappings = store.mitreMappings;
+      const topTechniques = mappings.length > 0
+        ? mappings.slice(0, 5).map(m => ({ id: m.technique_id, name: m.technique_name, tactic: m.tactic, confidence: m.confidence }))
+        : MITRE_TECHNIQUES.slice(0, 5).map(t => ({ id: t.id, name: t.name, tactic: t.tactic, confidence: 0.8 }));
+
+      return {
+        role: 'assistant',
+        content: `## MITRE ATT&CK TTP Mapping
+
+Based on the current incident and alert data, here are the most relevant techniques observed:
+
+${topTechniques.map(t => `- **${t.id}** ${t.name} (${t.tactic}) — ${(t.confidence * 100).toFixed(0)}% confidence`).join('\n')}
+
+### Coverage Analysis
+- **${topTechniques.length}** techniques mapped across the active threat landscape
+- Dominant tactic: **${topTechniques[0]?.tactic || 'N/A'}**
+- These mappings inform detection rule tuning and containment priorities
+
+Review the MITRE ATT&CK Heatmap page for full technique frequency distribution.`,
+        mitreTechniques: topTechniques,
+      };
+    }
+
+    if (q.includes('containment') || q.includes('containment plan')) {
+      const steps = activeIncident
+        ? [
+            { step: '1', action: `Isolate systems linked to "${activeIncident.title}"`, priority: 'critical' },
+            { step: '2', action: 'Block all malicious IOCs at the network perimeter', priority: 'critical' },
+            { step: '3', action: 'Revoke active sessions and reset compromised credentials', priority: 'high' },
+            { step: '4', action: 'Deploy enhanced detection rules for identified TTPs', priority: 'medium' },
+          ]
+        : [
+            { step: '1', action: 'Identify the scope of affected systems and users', priority: 'critical' },
+            { step: '2', action: 'Block malicious infrastructure at firewall and DNS', priority: 'critical' },
+            { step: '3', action: 'Reset credentials and enforce MFA on impacted accounts', priority: 'high' },
+            { step: '4', action: 'Deploy monitoring rules for observed attack patterns', priority: 'medium' },
+          ];
+
+      return {
+        role: 'assistant',
+        content: `## Containment Plan
+
+${activeIncident
+  ? `Generated for incident: **${activeIncident.title}** (${activeIncident.severity.toUpperCase()})`
+  : 'General containment strategy based on current threat posture'}
+
+Execute these steps in priority order. Critical actions must complete before moving to high priority items.`,
+        remediationSteps: steps,
+      };
+    }
+
+    if (q.includes('threat intel') || q.includes('review threat')) {
+      const iocs = store.iocs.slice(0, 8).map(i => ({ type: i.type, value: i.value, reputation: i.reputation }));
+      const malicious = store.iocs.filter(i => i.reputation === 'malicious').length;
+      const suspicious = store.iocs.filter(i => i.reputation === 'suspicious').length;
+
+      return {
+        role: 'assistant',
+        content: `## Threat Intelligence Review
+
+Current IOC database summary:
+
+- **${store.iocs.length}** total indicators tracked
+- **${malicious}** confirmed malicious
+- **${suspicious}** suspicious (under investigation)
+
+### Top Indicators
+${iocs.length > 0 ? iocs.map(i => `- **${i.type.toUpperCase()}** \`${i.value}\` — ${i.reputation}`).join('\n') : '- No IOCs in the database yet'}
+
+Cross-reference these indicators against your SIEM feeds and block confirmed malicious entries at the perimeter.`,
+        iocs,
+      };
+    }
+
+    return {
+      role: 'assistant',
+      content: `Processing your query: "${query}"
 
 Foundry IQ is analyzing the request against current threat intelligence. Based on the active incident context, here are the key considerations:
 
@@ -202,9 +315,7 @@ Foundry IQ is analyzing the request against current threat intelligence. Based o
 - Recommended: Review the MITRE mappings and IOC table for deeper context
 
 Ask me about specific TTPs, IOCs, or containment strategies.`,
-      };
-      setMessages(prev => [...prev, response]);
-    }, 800);
+    };
   };
 
   return (
@@ -245,7 +356,7 @@ Ask me about specific TTPs, IOCs, or containment strategies.`,
                 {['Analyze the latest alerts', 'Map MITRE TTPs', 'Generate containment plan', 'Review threat intel'].map(q => (
                   <button
                     key={q}
-                    onClick={() => { setInput(q); }}
+                    onClick={() => handleQuickPrompt(q)}
                     className="rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:border-slate-600 transition-colors"
                   >
                     {q}
